@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 )
 
 type OpenAIClient struct {
@@ -19,67 +18,54 @@ func NewOpenAIClient(apiKey, model string) (*OpenAIClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("OpenAI API key is required")
 	}
-
-	// Default model if not specified
-	if model == "" || !isOpenAIModel(model) {
-		model = "gpt-5-mini"
+	if model == "" {
+		model = "gpt-5.4-mini"
 	}
-
-	return &OpenAIClient{
-		apiKey: apiKey,
-		model:  model,
-	}, nil
-}
-
-func isOpenAIModel(model string) bool {
-	validModels := []string{
-		// GPT-5 family (latest)
-		"gpt-5.1",
-		"gpt-5",
-		"gpt-5-mini",
-		"gpt-5-nano",
-
-		// GPT-4.1 family
-		"gpt-4.1",
-		"gpt-4.1-mini",
-		"gpt-4.1-nano",
-
-		// GPT-4 family (legacy)
-		"gpt-4",
-		"gpt-4-turbo",
-		"gpt-4-turbo-preview",
-		"gpt-4-0125-preview",
-		"gpt-4-1106-preview",
-		"gpt-3.5-turbo",
-		"gpt-3.5-turbo-0125",
-		"gpt-3.5-turbo-1106",
-	}
-
-	for _, valid := range validModels {
-		if strings.HasPrefix(model, valid) {
-			return true
-		}
-	}
-	return false
+	return &OpenAIClient{apiKey: apiKey, model: model}, nil
 }
 
 // GenerateCommitMessage generates a commit message using OpenAI
 func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error) {
-	// Prepare the request
+	schema := jsonSchemaObject{
+		Type: "object",
+		Properties: map[string]jsonSchemaProperty{
+			"header":      {Type: "string", Description: "Short imperative commit header, 50 chars max"},
+			"description": {Type: "string", Description: "Longer explanation of what changed and why"},
+		},
+		Required:             []string{"header", "description"},
+		AdditionalProperties: false,
+	}
+
+	schemaBytes, err := json.Marshal(schema)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal schema: %w", err)
+	}
+
 	reqBody := openAIRequest{
 		Model: c.model,
-		Messages: []openAIMessage{
+		Input: []openAIInput{
 			{
-				Role:    "system",
-				Content: "You are a helpful assistant that generates concise, well-structured git commit messages.",
+				Role: "system",
+				Content: []openAIContentBlock{
+					{Type: "input_text", Text: "You write concise, well-structured git commit messages."},
+				},
 			},
 			{
-				Role:    "user",
-				Content: fmt.Sprintf(commitPrompt, diff),
+				Role: "user",
+				Content: []openAIContentBlock{
+					{Type: "input_text", Text: fmt.Sprintf(commitPrompt, diff)},
+				},
 			},
 		},
-		Temperature: 0.3,
-		MaxTokens:   1000,
+		Text: openAITextConfig{
+			Format: openAIFormat{
+				Type:   "json_schema",
+				Name:   "commit_message",
+				Strict: true,
+				Schema: schemaBytes,
+			},
+		},
+		MaxOutputTokens: 1000,
 	}
 
 	jsonData, err := json.Marshal(reqBody)
@@ -87,8 +73,7 @@ func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Create the HTTP request
-	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/responses", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -96,15 +81,12 @@ func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
 
-	// Send the request
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
@@ -118,58 +100,82 @@ func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 		return nil, fmt.Errorf("OpenAI API error: status %d - %s", resp.StatusCode, string(body))
 	}
 
-	// Parse the response
 	var openAIResp openAIResponse
 	if err := json.Unmarshal(body, &openAIResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
-	if len(openAIResp.Choices) == 0 {
+	if openAIResp.Status != "completed" {
+		return nil, fmt.Errorf("OpenAI response status: %s", openAIResp.Status)
+	}
+
+	if len(openAIResp.Output) > 0 && len(openAIResp.Output[0].Content) > 0 {
+		first := openAIResp.Output[0].Content[0]
+		if first.Type == "refusal" {
+			return nil, fmt.Errorf("OpenAI refused the request: %s", first.Refusal)
+		}
+	}
+
+	if openAIResp.OutputText == "" {
 		return nil, fmt.Errorf("empty response from OpenAI")
 	}
 
-	// Parse the commit message from the response
-	return ParseResponse(openAIResp.Choices[0].Message.Content)
+	return parseJSONCommitMessage(openAIResp.OutputText)
 }
 
-// OpenAI API types
+// --- Request types ---
+
 type openAIRequest struct {
-	Model       string          `json:"model"`
-	Messages    []openAIMessage `json:"messages"`
-	Temperature float64         `json:"temperature"`
-	MaxTokens   int             `json:"max_tokens"`
+	Model           string           `json:"model"`
+	Input           []openAIInput    `json:"input"`
+	Text            openAITextConfig `json:"text"`
+	MaxOutputTokens int              `json:"max_output_tokens"`
 }
 
-type openAIMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+type openAIInput struct {
+	Role    string               `json:"role"`
+	Content []openAIContentBlock `json:"content"`
 }
+
+type openAIContentBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type openAITextConfig struct {
+	Format openAIFormat `json:"format"`
+}
+
+type openAIFormat struct {
+	Type   string          `json:"type"`
+	Name   string          `json:"name"`
+	Strict bool            `json:"strict"`
+	Schema json.RawMessage `json:"schema"`
+}
+
+// --- Response types ---
 
 type openAIResponse struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int    `json:"created"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Index   int `json:"index"`
-		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-	Usage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	} `json:"usage"`
+	ID         string         `json:"id"`
+	Status     string         `json:"status"`
+	Output     []openAIOutput `json:"output"`
+	OutputText string         `json:"output_text"`
+}
+
+type openAIOutput struct {
+	Content []openAIOutputContent `json:"content"`
+}
+
+type openAIOutputContent struct {
+	Type    string `json:"type"`
+	Text    string `json:"text,omitempty"`
+	Refusal string `json:"refusal,omitempty"`
 }
 
 type openAIErrorResponse struct {
 	Error struct {
 		Message string `json:"message"`
 		Type    string `json:"type"`
-		Param   string `json:"param"`
 		Code    string `json:"code"`
 	} `json:"error"`
 }

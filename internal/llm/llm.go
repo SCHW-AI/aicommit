@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -9,8 +10,8 @@ import (
 
 // CommitMessage represents a structured commit message
 type CommitMessage struct {
-	Header      string
-	Description string
+	Header      string `json:"header"`
+	Description string `json:"description"`
 }
 
 // Format returns the formatted commit message
@@ -51,30 +52,15 @@ func NewClient(providerValue provider.Provider, model, apiKey string) (Client, e
 }
 
 // Common prompt for all providers
-const commitPrompt = `Analyze this git diff and suggest a commit message. 
+const commitPrompt = `Analyze this git diff and suggest a commit message.
 
-CRITICAL: You must respond in EXACTLY this format. Do not add any other text, explanations, or formatting:
-
-HEADER: [your header text here]
-DESCRIPTION: [your description text here]
-
-STRICT REQUIREMENTS:
-- Start with exactly "HEADER: " (including the space after colon)
+Requirements:
 - Header must be 50 characters or less
 - Use imperative mood (Add, Fix, Update - NOT Added, Fixed, Updated)
-- Then a blank line
-- Then start with exactly "DESCRIPTION: " (including the space after colon)
 - Description should explain what changed and why
 - Do not use markdown, bullets, or special formatting
-- Do not add introductory text like "Here's a suggested commit message"
-- Do not add closing text or explanations
-- Your response should contain ONLY these two lines
 
-EXAMPLE FORMAT:
-HEADER: Add user authentication system
-DESCRIPTION: Implements login/logout functionality with JWT tokens and password hashing for secure user management
-
-Now analyze this diff:
+Diff:
 
 %s`
 
@@ -102,6 +88,19 @@ func ParseResponse(response string) (*CommitMessage, error) {
 		Header:      header,
 		Description: description,
 	}, nil
+}
+
+// parseJSONCommitMessage unmarshals a JSON string returned by providers
+// that use schema-enforced structured output (Gemini, OpenAI).
+func parseJSONCommitMessage(jsonText string) (*CommitMessage, error) {
+	var msg CommitMessage
+	if err := json.Unmarshal([]byte(jsonText), &msg); err != nil {
+		return nil, fmt.Errorf("failed to parse structured response: %w", err)
+	}
+	if msg.Header == "" {
+		return nil, fmt.Errorf("structured response missing header field")
+	}
+	return &msg, nil
 }
 
 // TruncateDiff truncates the diff if it's too long

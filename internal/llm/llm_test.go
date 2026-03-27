@@ -38,7 +38,7 @@ func TestParseResponseAllowsLongHeader(t *testing.T) {
 }
 
 func TestNewClientValidatesProviderModelPair(t *testing.T) {
-	_, err := NewClient(provider.Anthropic, "gpt-5-mini", "secret")
+	_, err := NewClient(provider.Anthropic, "gemini-3-flash-preview", "secret")
 	if err == nil {
 		t.Fatal("expected provider/model mismatch")
 	}

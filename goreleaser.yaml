@@ -1,0 +1,44 @@
+project_name: aicommit
+
+before:
+  hooks:
+    - go test ./...
+
+builds:
+  - id: aicommit
+    main: ./main.go
+    binary: aicommit
+    goos:
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/SCHW-AI/aicommit/cmd.version={{.Version}}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+
+release:
+  github:
+    owner: SCHW-AI
+    name: aicommit

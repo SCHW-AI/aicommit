@@ -1,266 +1,107 @@
-# AI Commit - PowerShell Git Commit Assistant
+# AICommit
 
-Generate intelligent git commit messages using Claude AI. This PowerShell module analyzes your git diff and suggests properly formatted commit messages following best practices.
+AICommit is a Go CLI that reads your git diff, asks an LLM for a commit message, lets you review or edit it, then commits the result. The project is now Go-only, with secure OS-backed secret storage and a browser-based configuration UI.
 
-## Features
+If you already have the old PowerShell module installed, follow [MIGRATION.md](MIGRATION.md).
 
-- 🤖 **AI-Powered Analysis**: Uses AI to understand your code changes
-- 📝 **Professional Format**: Generates commit messages with proper header and description
-- 🔄 **Multi-Model Support**: Works with both Claude (Anthropic) and Gemini (Google) AI models
-- 🔍 **Comprehensive Diff Analysis**: Analyzes both tracked and untracked files
-- ✏️ **Interactive Workflow**: Review, edit, or cancel before committing
-- 🌍 **UTF-8 Support**: Handles international characters correctly
-- ⚡ **PowerShell 5.1+ Compatible**: Works with Windows PowerShell and PowerShell Core
-- 🚀 **Git Push Support**: Optional flag to push after committing
-- 📦 **Google Apps Script Integration**: Optional clasp push support for GAS projects
-- ☁️ **Cloudflare Workers Deployment**: Optional wrangler deploy support for Workers projects
-- 📤 **Diff Export**: Export the comprehensive diff to a file for review
+## What changed
 
-## Prerequisites
+- PowerShell support is removed from this codebase
+- Environment variables are no longer used for config or secrets
+- API keys are stored only in your operating system's credential manager
+- Anthropic with `claude-haiku-4-5-20251001` is the default out-of-box path
 
-- PowerShell 5.1 or higher
-- Git installed and accessible from PowerShell
-- AI API key: Either Anthropic ([Anthropic Console](https://console.anthropic.com/)) or Google ([Google AI Studio](https://aistudio.google.com/apikey))
-- (Optional) Clasp CLI for Google Apps Script projects (`npm install -g @google/clasp`)
-- (Optional) Wrangler CLI for Cloudflare Workers projects (`npm install -g wrangler`)
+## Install
 
-## Installation
+Download a release binary from GitHub Releases or build from source.
 
-### Option 1: Clone to PowerShell Modules (Recommended)
-
-```powershell
-# Clone directly to your modules folder
-git clone https://github.com/SCHWAI-AI/aicommit-powershell.git "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\AICommit"
-
-# Import the module
-Import-Module AICommit
+```bash
+git clone https://github.com/SCHW-AI/aicommit.git
+cd aicommit
+go build -o aicommit .
 ```
 
-### Option 2: Clone and Import Manually
+## First-time setup
 
-```powershell
-# Clone to any location
-git clone https://github.com/SCHWAI-AI/aicommit-powershell.git
-cd aicommit-powershell
+The recommended setup flow is the configuration UI:
 
-# Import the module
-Import-Module .\AICommit.psm1
+```bash
+aicommit config ui
 ```
 
-### Option 3: Add to Your PowerShell Profile
+This opens a local browser-based settings screen where you can:
 
-For permanent availability, add this to your PowerShell profile:
+- choose a provider
+- choose a provider-valid model
+- set the diff limit
+- securely store or delete API keys
 
-```powershell
-# Open your profile
-notepad $PROFILE
+You can also manage settings from the CLI:
 
-# Add these lines:
-Import-Module "C:\path\to\aicommit-powershell\AICommit.psm1"
-
-# API Keys (set the ones you need)
-$env:ANTHROPIC_API_KEY_AICOMMIT = "your-anthropic-key-here"
-$env:GEMINI_API_KEY_AICOMMIT = "your-google-key-here"
-
-# Your preferred model (optional, defaults to gemini-2.5-flash)
-$env:AI_COMMIT_MODEL = "gemini-2.5-flash"
-
-# Increase diff size for large commits (Optional, default is 30000 characters)
-$env:AI_COMMIT_MAX_DIFF_LENGTH = "50000"
-```
-
-## Setup
-
-### Setting Your API Key
-
-The module supports both Claude (Anthropic) and Gemini (Google) models. Set the appropriate API key for your chosen model:
-
-**For Gemini (default):**
-```powershell
-$env:GEMINI_API_KEY_AICOMMIT = "your-google-api-key-here"
-```
-For Claude:
-```powershell
-$env:ANTHROPIC_API_KEY_AICOMMIT = "sk-ant-api04-your-key-here"
-```
-For permanent setup (add both to your profile if you want to switch between them):
-```powershell
-Add-Content $PROFILE '$env:GEMINI_API_KEY_AICOMMIT = "your-google-api-key-here"'
-Add-Content $PROFILE '$env:ANTHROPIC_API_KEY_AICOMMIT = "sk-ant-api04-your-key-here"'
-```
-And restart your profile:
-```powershell
-. $PROFILE
-```
-
-### Setting Your Preferred Model (Optional)
-
-Choose your preferred AI model by setting an environment variable:
-
-```powershell
-# For Gemini (default):
-$env:AI_COMMIT_MODEL = "gemini-2.5-flash"
-
-# For Claude:
-powershell$env:AI_COMMIT_MODEL = "claude-3-5-haiku-20241022"
-
-# For permanent setup:
-Add-Content $PROFILE '$env:AI_COMMIT_MODEL = "gemini-2.5-flash"'
+```bash
+aicommit config show
+aicommit config set provider anthropic
+aicommit config set model claude-haiku-4-5-20251001
+aicommit config set max-diff-length 30000
+aicommit config set-key anthropic
+aicommit config delete-key anthropic
 ```
 
 ## Usage
 
-Navigate to any git repository with changes and run:
-
-```powershell
-# Basic commit
+```bash
 aicommit
-
-# Commit and push to git remote
-aicommit -push
-
-# Commit and push to clasp (for Google Apps Script projects)
-aicommit -clasp
-
-# Commit and push to both git and clasp
-aicommit -push -clasp
-
-# Commit, push to git, and deploy to wrangler
-aicommit -push -wrangler
-
-# Export diff to file without committing (for review)
-aicommit -export
+aicommit --push
+aicommit --clasp
+aicommit --wrangler
+aicommit --export
 ```
 
-The tool will:
-1. Check if you're in a valid git repository
-2. If using -clasp, verify .clasp.json exists and confirm you've pulled latest changes. If using -wrangler, verify wrangler.toml exists
-3. Analyze your git diff (both staged and unstaged changes)
-4. Send the diff to Claude AI for analysis
-5. Present a suggested commit message
-6. Give you options to:
-   - **Accept** (y/yes or Enter): Use the suggested message
-   - **Edit** (e/edit): Modify the header and/or description
-   - **Cancel** (c/cancel): Abort the commit
-7. Stage and commit changes
-8. Push to git remote (if -push flag used)
-9. Push to clasp (if -clasp flag used)
+Behavior:
 
-**Note:** When using `-export`, the tool exports the diff to `git-diff-export.txt` and exits without calling the AI or committing. This is useful for reviewing what would be analyzed.
+1. Checks that you are in a git repository
+2. Reads tracked and untracked changes
+3. Generates a `HEADER` and `DESCRIPTION`
+4. Lets you accept, edit, or cancel
+5. Stages everything and commits
+6. Optionally pushes or deploys
 
-### Example Workflow
+`--export` writes `git-diff-export.txt` and exits without calling the model or mutating git state.
 
-```powershell
-PS C:\MyProject> aicommit
-Analyzing changes...
-JSON validation passed
-Request size: 2543 characters
-Getting AI suggestion...
+## Configuration model
 
---- SUGGESTED COMMIT MESSAGE ---
-HEADER: Add user authentication module
-DESCRIPTION: Implements JWT-based authentication with login/logout endpoints and middleware for protecting routes
---- END SUGGESTION ---
+AICommit stores non-secret settings in a YAML config file and secrets in the OS keychain / credential manager.
 
-Use this message? (y)es / (e)dit / (c)ancel: y
-Staging changes...
-Committing...
+Config schema:
 
-Commit successful!
-Created: a3f2d45 Add user authentication module
-```
-#### Example with Flags
-```powershell
-# Push to git remote after commit
-PS C:\MyProject> aicommit -push
-[... commit process ...]
-Commit successful!
-Created: a3f2d45 Add user authentication module
-Pushing to remote...
-Push successful!
-
-# For Google Apps Script project with clasp
-PS C:\MyGASProject> aicommit -clasp
-Have you pulled from clasp? (y/n): y
-[... commit process ...]
-Commit successful!
-Created: b4g3e56 Update Google Sheets functions
-Pushing to clasp...
-Clasp push successful!
+```yaml
+provider: anthropic
+model: claude-haiku-4-5-20251001
+max_diff_length: 30000
 ```
 
-## How It Works
+If config is missing or no API key is stored for the active provider, AICommit fails loudly and tells you to run:
 
-1. **Diff Collection**: Gathers all changes including:
-   - Modified tracked files (`git diff HEAD`)
-   - New untracked files (`git ls-files --others`)
+```bash
+aicommit config ui
+```
 
-2. **AI Analysis**: Sends the diff to Claude with specific instructions for:
-   - Imperative mood (Add, Fix, Update)
-   - 50-character header limit
-   - Detailed description of what and why
+## Supported providers
 
-3. **Interactive Review**: Presents the suggestion and allows editing before commit
+- Anthropic
+- Gemini
+- OpenAI
 
-4. **Auto-staging**: Automatically stages all changes (`git add .`) before committing
+Default:
 
-## Configuration
+- provider: `anthropic`
+- model: `claude-haiku-4-5-20251001`
 
-The module uses these environment variables:
+## Development
 
-- **`AI_COMMIT_MODEL`**: Your preferred AI model
-- **`AI_COMMIT_MAX_DIFF_LENGTH`**: Maximum diff size in characters (default: `30000`)
-- **`GEMINI_API_KEY_AICOMMIT`**: Required for Gemini models
-- **`ANTHROPIC_API_KEY_AICOMMIT`**: Required for Claude models
+```bash
+go test ./...
+go build ./...
+```
 
-
-## Troubleshooting
-
-### "Not in a git repository"
-- Ensure you're in a directory initialized with `git init`
-
-### "API_KEY environment variable not set"
-- For Gemini: Check with `echo $env:GEMINI_API_KEY_AICOMMIT`
-- For Claude: Check with `echo $env:ANTHROPIC_API_KEY_AICOMMIT`
-- Ensure you've restarted PowerShell after setting permanent environment variables
-
-### API Errors
-- Verify your API key is valid
-- Check you have credits in your Anthropic account
-- Review the `debug_failed_request.json` file created on errors
-
-### Encoding Issues
-- The module sets UTF-8 encoding automatically
-- If you see character issues, ensure your terminal supports UTF-8
-
-### Module not updating after changes
-If you've modified the module files and changes aren't reflected:
-- Reload the module: `Import-Module AICommit -Force`
-
-## Security
-
-- **Never commit your API key** to version control
-- The `.gitignore` includes patterns to prevent accidental key exposure
-- API keys should only be set as environment variables
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Author
-
-**Aaron Zlotowitz**  
-[SCHW-AI](https://github.com/SCHW-AI)
-
-## Acknowledgments
-
-- Built with [Anthropic's Claude AI](https://www.anthropic.com/)
-- Inspired by the need for better commit messages
-
-## Support
-
-If you encounter any issues or have questions, please [open an issue](https://github.com/SCHWAI-AI/aicommit-powershell/issues) on GitHub.
+The repository ships a minimal CI flow and a tagged release flow for GitHub Releases. Package-manager automation is intentionally out of scope until it is fully maintained and tested.

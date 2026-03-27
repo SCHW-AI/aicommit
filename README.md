@@ -1,10 +1,12 @@
 # AICommit
 
-AICommit is a Go CLI that reads your git diff, asks an LLM for a commit message, lets you review or edit it, then commits the result. It is now a Go-only project with secure OS-backed secret storage and a browser-based configuration UI.
+AICommit is a Go CLI that reads your git diff, asks an LLM for a commit message, lets you review or edit it, then commits the result. The project is now Go-only, with secure OS-backed secret storage and a browser-based configuration UI.
+
+If you already have the old PowerShell module installed, follow [MIGRATION.md](MIGRATION.md).
 
 ## What changed
 
-- PowerShell support is deprecated and removed from this codebase
+- PowerShell support is removed from this codebase
 - Environment variables are no longer used for config or secrets
 - API keys are stored only in your operating system's credential manager
 - Anthropic with `claude-haiku-4-5-20251001` is the default out-of-box path

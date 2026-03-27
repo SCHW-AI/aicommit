@@ -13,7 +13,14 @@ If you already have the old PowerShell module installed, follow [MIGRATION.md](M
 
 ## Install
 
-Download a release binary from GitHub Releases or build from source.
+If you have Go installed:
+```bash
+go install github.com/SCHW-AI/aicommit@latest
+```
+
+Alternatively, download a release binary from [GitHub Releases](https://github.com/SCHW-AI/aicommit/releases) or build from source.
+
+> **Windows note:** Release binaries are unsigned. Windows Smart App Control or SmartScreen may block them. `go install` builds locally and avoids this entirely.
 
 ```bash
 git clone https://github.com/SCHW-AI/aicommit.git

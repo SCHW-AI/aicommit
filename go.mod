@@ -2,8 +2,6 @@ module github.com/SCHW-AI/aicommit
 
 go 1.23.0
 
-replace github.com/SCHW-AI/aicommit => ./
-
 require (
 	github.com/99designs/keyring v1.2.2
 	github.com/adrg/xdg v0.5.3

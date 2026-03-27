@@ -42,3 +42,4 @@ release:
   github:
     owner: SCHW-AI
     name: aicommit
+  name_template: "v{{.Version}} — AI-Powered Commit Messages from Your Terminal"

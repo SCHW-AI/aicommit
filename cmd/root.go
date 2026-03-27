@@ -145,7 +145,7 @@ func runCommit(cmd *cobra.Command, deps Dependencies, options *rootOptions) erro
 	}
 
 	color.Yellow("Getting AI suggestion...")
-	suggestion, err := client.GenerateCommitMessage(llm.TruncateDiff(diff, cfg.MaxDiffLength))
+	suggestion, err := llm.GenerateWithRetry(client, llm.TruncateDiff(diff, cfg.MaxDiffLength), 3)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit message: %w", err)
 	}

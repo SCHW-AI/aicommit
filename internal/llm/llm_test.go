@@ -27,10 +27,13 @@ func TestParseResponseRequiresHeader(t *testing.T) {
 	}
 }
 
-func TestParseResponseRejectsLongHeader(t *testing.T) {
-	_, err := ParseResponse("HEADER: " + strings.Repeat("a", 51))
-	if err == nil {
-		t.Fatal("expected long header error")
+func TestParseResponseAllowsLongHeader(t *testing.T) {
+	msg, err := ParseResponse("HEADER: " + strings.Repeat("a", 51))
+	if err != nil {
+		t.Fatalf("ParseResponse failed: %v", err)
+	}
+	if len(msg.Header) != 51 {
+		t.Fatalf("expected 51-char header, got %d", len(msg.Header))
 	}
 }
 

@@ -98,10 +98,6 @@ func ParseResponse(response string) (*CommitMessage, error) {
 		return nil, fmt.Errorf("no header found in response")
 	}
 
-	if len(header) > 50 {
-		return nil, fmt.Errorf("header exceeds 50 characters")
-	}
-
 	return &CommitMessage{
 		Header:      header,
 		Description: description,
@@ -114,4 +110,29 @@ func TruncateDiff(diff string, maxLength int) string {
 		return diff
 	}
 	return diff[:maxLength] + "\n... (diff truncated)"
+}
+
+// GenerateWithRetry calls GenerateCommitMessage and retries if the header exceeds 50 characters.
+func GenerateWithRetry(client Client, diff string, maxRetries int) (*CommitMessage, error) {
+	msg, err := client.GenerateCommitMessage(diff)
+	if err != nil {
+		return nil, err
+	}
+
+	for attempt := 0; attempt < maxRetries && len(msg.Header) > 50; attempt++ {
+		retryDiff := fmt.Sprintf(
+			"RETRY: Your previous header was %d characters: %q. It MUST be 50 characters or fewer. Shorten it.\n\n%s",
+			len(msg.Header), msg.Header, diff,
+		)
+		msg, err = client.GenerateCommitMessage(retryDiff)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(msg.Header) > 50 {
+		msg.Header = msg.Header[:50]
+	}
+
+	return msg, nil
 }

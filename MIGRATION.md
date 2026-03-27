@@ -70,7 +70,13 @@ Install the new binary from GitHub Releases or build it from source:
 ```powershell
 git clone https://github.com/SCHW-AI/aicommit.git
 cd aicommit
-go build -o aicommit .
+.\scripts\build.ps1
+```
+
+On macOS or Linux, use:
+
+```bash
+./scripts/build.sh
 ```
 
 Make sure the built binary is on your `PATH`, or run it from the build directory.

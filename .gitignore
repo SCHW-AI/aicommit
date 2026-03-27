@@ -1,6 +1,8 @@
 # Build artifacts
 dist/
 build/
+/aicommit
+/aicommit.exe
 coverage/
 *.exe
 *.out

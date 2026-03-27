@@ -18,8 +18,16 @@ Download a release binary from GitHub Releases or build from source.
 ```bash
 git clone https://github.com/SCHW-AI/aicommit.git
 cd aicommit
-go build -o aicommit .
+./scripts/build.sh
 ```
+
+On Windows, prefer:
+
+```powershell
+.\scripts\build.ps1
+```
+
+These scripts use `go env GOEXE` so the local build gets the correct executable suffix for the current platform.
 
 ## First-time setup
 

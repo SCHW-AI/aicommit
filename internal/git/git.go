@@ -57,14 +57,14 @@ func GetFullDiff() (string, error) {
 	if len(untrackedOutput) > 0 {
 		fullDiff.WriteString("=== NEW FILES ===\n")
 		untrackedFiles := strings.Split(strings.TrimSpace(string(untrackedOutput)), "\n")
-		
+
 		for _, file := range untrackedFiles {
 			if file == "" {
 				continue
 			}
-			
+
 			fullDiff.WriteString(fmt.Sprintf("\n--- New file: %s ---\n", file))
-			
+
 			// Try to read the file content
 			content, err := os.ReadFile(file)
 			if err != nil {
@@ -92,10 +92,20 @@ func StageAll() error {
 
 // Commit creates a commit with the given message
 func Commit(message string) error {
-	cmd := exec.Command("git", "commit", "-m", message)
+	tmpFile, err := os.CreateTemp("", "aicommit-message-*.txt")
+	if err != nil {
+		return fmt.Errorf("failed to create temp commit message file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if err := os.WriteFile(tmpFile.Name(), []byte(message), 0600); err != nil {
+		return fmt.Errorf("failed to write temp commit message file: %w", err)
+	}
+
+	cmd := exec.Command("git", "commit", "-F", tmpFile.Name())
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git commit failed: %v - %s", err, stderr.String())
 	}
@@ -107,7 +117,7 @@ func Push() error {
 	cmd := exec.Command("git", "push")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("git push failed: %v - %s", err, stderr.String())
 	}
@@ -209,11 +219,11 @@ func GetStagedFiles() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(output) == 0 {
 		return []string{}, nil
 	}
-	
+
 	files := strings.Split(strings.TrimSpace(string(output)), "\n")
 	return files, nil
 }
@@ -225,11 +235,11 @@ func GetModifiedFiles() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(output) == 0 {
 		return []string{}, nil
 	}
-	
+
 	files := strings.Split(strings.TrimSpace(string(output)), "\n")
 	return files, nil
 }
@@ -241,13 +251,13 @@ func GetUntrackedFiles() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(output) == 0 {
 		return []string{}, nil
 	}
-	
+
 	files := strings.Split(strings.TrimSpace(string(output)), "\n")
-	
+
 	// Filter out empty strings
 	var result []string
 	for _, file := range files {
@@ -255,32 +265,32 @@ func GetUntrackedFiles() ([]string, error) {
 			result = append(result, file)
 		}
 	}
-	
+
 	return result, nil
 }
 
 // GetFileExtensions returns unique file extensions from changed files
 func GetFileExtensions() ([]string, error) {
 	extensions := make(map[string]bool)
-	
+
 	// Get all changed files
 	modified, _ := GetModifiedFiles()
 	untracked, _ := GetUntrackedFiles()
-	
+
 	allFiles := append(modified, untracked...)
-	
+
 	for _, file := range allFiles {
 		ext := filepath.Ext(file)
 		if ext != "" {
 			extensions[ext] = true
 		}
 	}
-	
+
 	// Convert map to slice
 	var result []string
 	for ext := range extensions {
 		result = append(result, ext)
 	}
-	
+
 	return result, nil
 }

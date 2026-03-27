@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-
-	"github.com/SCHW-AI/aicommit/internal/config"
 )
 
 type OpenAIClient struct {
@@ -21,12 +19,12 @@ func NewOpenAIClient(apiKey, model string) (*OpenAIClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("OpenAI API key is required")
 	}
-	
+
 	// Default model if not specified
 	if model == "" || !isOpenAIModel(model) {
 		model = "gpt-5-mini"
 	}
-	
+
 	return &OpenAIClient{
 		apiKey: apiKey,
 		model:  model,
@@ -67,12 +65,9 @@ func isOpenAIModel(model string) bool {
 
 // GenerateCommitMessage generates a commit message using OpenAI
 func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error) {
-	cfg := config.GetConfig()
-	diff = TruncateDiff(diff, cfg.MaxDiffLength)
-	
 	// Prepare the request
 	reqBody := openAIRequest{
-		Model:     c.model,
+		Model: c.model,
 		Messages: []openAIMessage{
 			{
 				Role:    "system",
@@ -86,21 +81,21 @@ func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 		Temperature: 0.3,
 		MaxTokens:   1000,
 	}
-	
+
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Create the HTTP request
 	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
-	
+
 	// Send the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -108,13 +103,13 @@ func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	if resp.StatusCode != http.StatusOK {
 		var errorResp openAIErrorResponse
 		if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Message != "" {
@@ -122,17 +117,17 @@ func (c *OpenAIClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 		}
 		return nil, fmt.Errorf("OpenAI API error: status %d - %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Parse the response
 	var openAIResp openAIResponse
 	if err := json.Unmarshal(body, &openAIResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	if len(openAIResp.Choices) == 0 {
 		return nil, fmt.Errorf("empty response from OpenAI")
 	}
-	
+
 	// Parse the commit message from the response
 	return ParseResponse(openAIResp.Choices[0].Message.Content)
 }

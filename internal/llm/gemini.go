@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-
-	"github.com/SCHW-AI/aicommit/internal/config"
 )
 
 type GeminiClient struct {
@@ -21,17 +19,17 @@ func NewGeminiClient(apiKey, model string) (*GeminiClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("Gemini API key is required")
 	}
-	
+
 	// Default model if not specified
 	if model == "" || !isGeminiModel(model) {
 		model = "gemini-2.5-flash"
 	}
-	
+
 	// Ensure model has proper prefix
 	if !strings.HasPrefix(model, "models/") {
 		model = "models/" + model
 	}
-	
+
 	return &GeminiClient{
 		apiKey: apiKey,
 		model:  model,
@@ -68,9 +66,6 @@ func isGeminiModel(model string) bool {
 
 // GenerateCommitMessage generates a commit message using Gemini
 func (c *GeminiClient) GenerateCommitMessage(diff string) (*CommitMessage, error) {
-	cfg := config.GetConfig()
-	diff = TruncateDiff(diff, cfg.MaxDiffLength)
-	
 	// Prepare the request
 	reqBody := geminiRequest{
 		Contents: []geminiContent{
@@ -83,24 +78,24 @@ func (c *GeminiClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 			},
 		},
 	}
-	
+
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
+
 	// Create the API URL
 	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/%s:generateContent", c.model)
-	
+
 	// Create the HTTP request
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-goog-api-key", c.apiKey)
-	
+
 	// Send the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -108,13 +103,13 @@ func (c *GeminiClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
-	
+
 	if resp.StatusCode != http.StatusOK {
 		var errorResp geminiErrorResponse
 		if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error.Message != "" {
@@ -122,17 +117,17 @@ func (c *GeminiClient) GenerateCommitMessage(diff string) (*CommitMessage, error
 		}
 		return nil, fmt.Errorf("Gemini API error: status %d - %s", resp.StatusCode, string(body))
 	}
-	
+
 	// Parse the response
 	var geminiResp geminiResponse
 	if err := json.Unmarshal(body, &geminiResp); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	
+
 	if len(geminiResp.Candidates) == 0 || len(geminiResp.Candidates[0].Content.Parts) == 0 {
 		return nil, fmt.Errorf("empty response from Gemini")
 	}
-	
+
 	// Parse the commit message from the response
 	return ParseResponse(geminiResp.Candidates[0].Content.Parts[0].Text)
 }

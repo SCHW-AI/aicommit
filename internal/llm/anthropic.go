@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/SCHW-AI/aicommit/internal/config"
 )
 
 type AnthropicClient struct {
@@ -63,9 +61,6 @@ func isClaudeModel(model string) bool {
 
 // GenerateCommitMessage generates a commit message using Claude
 func (c *AnthropicClient) GenerateCommitMessage(diff string) (*CommitMessage, error) {
-	cfg := config.GetConfig()
-	diff = TruncateDiff(diff, cfg.MaxDiffLength)
-
 	// Prepare the request
 	reqBody := anthropicRequest{
 		Model:     c.model,

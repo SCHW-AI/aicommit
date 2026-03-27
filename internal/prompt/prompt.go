@@ -18,13 +18,13 @@ func Confirm(message string, defaultValue bool) (bool, error) {
 	if defaultValue {
 		defaultText = "y"
 	}
-	
+
 	prompt := promptui.Prompt{
 		Label:     message,
 		IsConfirm: true,
 		Default:   defaultText,
 	}
-	
+
 	_, err := prompt.Run()
 	if err != nil {
 		if err == promptui.ErrAbort {
@@ -32,7 +32,7 @@ func Confirm(message string, defaultValue bool) (bool, error) {
 		}
 		return false, err
 	}
-	
+
 	return true, nil
 }
 
@@ -43,7 +43,7 @@ func Select(message string, options []string) (string, error) {
 		Items: options,
 		Size:  len(options),
 	}
-	
+
 	_, result, err := prompt.Run()
 	return result, err
 }
@@ -54,7 +54,7 @@ func Input(message, defaultValue string) (string, error) {
 		Label:   message,
 		Default: defaultValue,
 	}
-	
+
 	return prompt.Run()
 }
 
@@ -66,64 +66,64 @@ func EditCommitMessage(current *llm.CommitMessage) (*llm.CommitMessage, error) {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
 	defer os.Remove(tmpFile.Name())
-	
+
 	// Write current message to temp file
 	content := fmt.Sprintf("HEADER: %s\n\nDESCRIPTION: %s\n", current.Header, current.Description)
 	content += "\n# Please edit the commit message above.\n"
 	content += "# Lines starting with '#' will be ignored.\n"
 	content += "# The first line should be the header (max 72 chars).\n"
 	content += "# The description can be multiple lines.\n"
-	
+
 	if err := os.WriteFile(tmpFile.Name(), []byte(content), 0644); err != nil {
 		return nil, fmt.Errorf("failed to write temp file: %w", err)
 	}
-	
+
 	// Open editor
 	editor := getEditor()
 	cmd := exec.Command(editor, tmpFile.Name())
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	
+
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("failed to open editor: %w", err)
 	}
-	
+
 	// Read edited content
 	editedContent, err := os.ReadFile(tmpFile.Name())
 	if err != nil {
 		return nil, fmt.Errorf("failed to read edited file: %w", err)
 	}
-	
+
 	// Parse edited content
 	lines := strings.Split(string(editedContent), "\n")
 	var header, description string
 	var descLines []string
 	inDescription := false
-	
+
 	for _, line := range lines {
 		// Skip comments
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
 			continue
 		}
-		
+
 		if strings.HasPrefix(line, "HEADER:") {
 			header = strings.TrimSpace(strings.TrimPrefix(line, "HEADER:"))
 			continue
 		}
-		
+
 		if strings.HasPrefix(line, "DESCRIPTION:") {
 			description = strings.TrimSpace(strings.TrimPrefix(line, "DESCRIPTION:"))
 			inDescription = true
 			continue
 		}
-		
+
 		// If we're in description section, collect lines
 		if inDescription && strings.TrimSpace(line) != "" {
 			descLines = append(descLines, line)
 		}
 	}
-	
+
 	// Join description lines if there are multiple
 	if len(descLines) > 0 {
 		if description != "" {
@@ -132,12 +132,12 @@ func EditCommitMessage(current *llm.CommitMessage) (*llm.CommitMessage, error) {
 			description = strings.Join(descLines, "\n")
 		}
 	}
-	
+
 	// If no header found, use the original
 	if header == "" {
 		header = current.Header
 	}
-	
+
 	return &llm.CommitMessage{
 		Header:      header,
 		Description: description,
@@ -153,7 +153,7 @@ func getEditor() string {
 	if editor := os.Getenv("VISUAL"); editor != "" {
 		return editor
 	}
-	
+
 	// Platform defaults
 	switch runtime.GOOS {
 	case "windows":
@@ -196,25 +196,25 @@ func ShowProgress(message string) func() {
 func MultiInput(message string) ([]string, error) {
 	fmt.Println(message)
 	fmt.Println("(Enter an empty line to finish)")
-	
+
 	var lines []string
 	for {
 		prompt := promptui.Prompt{
 			Label: ">",
 		}
-		
+
 		line, err := prompt.Run()
 		if err != nil {
 			return lines, err
 		}
-		
+
 		if line == "" {
 			break
 		}
-		
+
 		lines = append(lines, line)
 	}
-	
+
 	return lines, nil
 }
 
@@ -224,7 +224,7 @@ func Password(message string) (string, error) {
 		Label: message,
 		Mask:  '*',
 	}
-	
+
 	return prompt.Run()
 }
 

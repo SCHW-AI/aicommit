@@ -1,308 +1,44 @@
-# .goreleaser.yaml
 project_name: aicommit
 
 before:
   hooks:
-    - go mod tidy
-    - go generate ./...
+    - go test ./...
 
 builds:
   - id: aicommit
     main: ./main.go
     binary: aicommit
-    env:
-      - CGO_ENABLED=0
     goos:
-      - linux
       - windows
       - darwin
-      - freebsd
-      - openbsd
+      - linux
     goarch:
       - amd64
       - arm64
-      - arm
-      - 386
-    goarm:
-      - 6
-      - 7
-    ignore:
-      - goos: darwin
-        goarch: 386
-      - goos: windows
-        goarch: arm
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w -X github.com/SCHW-AI/aicommit/cmd.version={{.Version}}
-    mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - id: aicommit
+  - id: default
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
-      {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
-      {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
       - goos: windows
         format: zip
     files:
       - README.md
       - LICENSE
-      - docs/*
 
 checksum:
-  name_template: "checksums.txt"
-
-snapshot:
-  name_template: "{{ incpatch .Version }}-dev"
+  name_template: checksums.txt
 
 changelog:
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^ci:"
-      - "^build:"
-      - "^chore:"
+  use: github
 
-# Linux packages (deb, rpm, apk)
-nfpms:
-  - id: aicommit
-    package_name: aicommit
-    file_name_template: "{{ .ConventionalFileName }}"
-    vendor: SCHWAI
-    homepage: https://github.com/SCHW-AI/aicommit
-    maintainer: Aaron Zlotowitz <aaron@schwai.ai>
-    description: AI-powered Git commit message generator
-    license: MIT
-    formats:
-      - deb
-      - rpm
-      - apk
-      - archlinux
-    dependencies:
-      - git
-    bindir: /usr/bin
-    section: utils
-    priority: optional
-    contents:
-      - src: ./README.md
-        dst: /usr/share/doc/aicommit/README.md
-      - src: ./LICENSE
-        dst: /usr/share/doc/aicommit/LICENSE
-    scripts:
-      postinstall: |
-        #!/bin/sh
-        echo "AICommit installed successfully!"
-        echo "Run 'aicommit --help' to get started"
-      preremove: |
-        #!/bin/sh
-        # Clean up config directory if empty
-        if [ -d "$HOME/.config/aicommit" ]; then
-          rmdir "$HOME/.config/aicommit" 2>/dev/null || true
-        fi
-
-# Homebrew Formula
-brews:
-  - name: aicommit
-    repository:
-      owner: SCHW-AI
-      name: homebrew-tap
-      branch: main
-      token: "{{ .Env.GITHUB_TOKEN }}"
-    commit_author:
-      name: AICommit Bot
-      email: bot@schwai.ai
-    folder: Formula
-    homepage: https://github.com/SCHW-AI/aicommit
-    description: AI-powered Git commit message generator
-    license: MIT
-    test: |
-      system "#{bin}/aicommit", "--version"
-    dependencies:
-      - name: git
-        type: required
-    install: |
-      bin.install "aicommit"
-      
-      # Install shell completions
-      output = Utils.safe_popen_read("#{bin}/aicommit", "completion", "bash")
-      (bash_completion/"aicommit").write output
-      
-      output = Utils.safe_popen_read("#{bin}/aicommit", "completion", "zsh")
-      (zsh_completion/"_aicommit").write output
-      
-      output = Utils.safe_popen_read("#{bin}/aicommit", "completion", "fish")
-      (fish_completion/"aicommit.fish").write output
-
-# Scoop Manifest
-scoops:
-  - name: aicommit
-    repository:
-      owner: SCHW-AI
-      name: scoop-bucket
-      branch: main
-      token: "{{ .Env.GITHUB_TOKEN }}"
-    commit_author:
-      name: AICommit Bot
-      email: bot@schwai.ai
-    homepage: https://github.com/SCHW-AI/aicommit
-    description: AI-powered Git commit message generator
-    license: MIT
-
-# Chocolatey Package
-chocolateys:
-  - name: aicommit
-    authors: Aaron Zlotowitz
-    project_url: https://github.com/SCHW-AI/aicommit
-    license_url: https://github.com/SCHW-AI/aicommit/blob/main/LICENSE
-    require_license_acceptance: false
-    project_source_url: https://github.com/SCHW-AI/aicommit
-    docs_url: https://github.com/SCHW-AI/aicommit/blob/main/README.md
-    bug_tracker_url: https://github.com/SCHW-AI/aicommit/issues
-    tags: "git ai commit cli developer-tools productivity"
-    summary: AI-powered Git commit message generator
-    description: |
-      AICommit analyzes your git diff and generates intelligent commit messages
-      using AI models (Claude, Gemini, or OpenAI).
-
-      ## Features
-      - AI-powered commit message generation
-      - Support for multiple AI providers
-      - Interactive message editing
-      - Secure credential storage
-      - Git push and clasp integration
-    release_notes: "https://github.com/SCHW-AI/aicommit/releases/tag/v{{ .Version }}"
-    api_key: "{{ .Env.CHOCOLATEY_API_KEY }}"
-    source_repo: https://push.chocolatey.org/
-    skip_publish: false
-
-# WinGet Manifest
-winget:
-  - name: SCHWAI.AICommit
-    publisher: SCHWAI
-    author: Aaron Zlotowitz
-    short_description: AI-powered Git commit message generator
-    license: MIT
-    license_url: https://github.com/SCHW-AI/aicommit/blob/main/LICENSE
-    homepage: https://github.com/SCHW-AI/aicommit
-    publisher_url: https://github.com/SCHW-AI
-    package_identifier: SCHWAI.AICommit
-    repository:
-      owner: microsoft
-      name: winget-pkgs
-      branch: master
-      pull_request:
-        enabled: true
-        draft: true
-        base:
-          owner: microsoft
-          name: winget-pkgs
-          branch: master
-    commit_author:
-      name: AICommit Bot
-      email: bot@schwai.ai
-
-# Docker Images
-dockers:
-  - image_templates:
-      - "ghcr.io/SCHW-AI/aicommit:{{ .Version }}"
-      - "ghcr.io/SCHW-AI/aicommit:latest"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--pull"
-      - "--label=org.opencontainers.image.created={{.Date}}"
-      - "--label=org.opencontainers.image.title={{.ProjectName}}"
-      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
-      - "--label=org.opencontainers.image.version={{.Version}}"
-      - "--label=org.opencontainers.image.source={{.GitURL}}"
-      - "--platform=linux/amd64,linux/arm64"
-
-# GitHub Release
 release:
   github:
     owner: SCHW-AI
     name: aicommit
-  name_template: "v{{.Version}}"
-  draft: false
-  prerelease: auto
-  mode: append
-  header: |
-    ## AICommit v{{.Version}} Release
-
-    AI-powered Git commit message generator
-    
-  footer: |
-    ## Installation
-
-    ### Homebrew (macOS/Linux)
-    ```bash
-    brew tap SCHW-AI/tap
-    brew install aicommit
-    ```
-
-    ### Scoop (Windows)
-    ```powershell
-    scoop bucket add schwai https://github.com/SCHW-AI/scoop-bucket
-    scoop install aicommit
-    ```
-
-    ### Chocolatey (Windows)
-    ```powershell
-    choco install aicommit
-    ```
-
-    ### WinGet (Windows)
-    ```powershell
-    winget install SCHWAI.AICommit
-    ```
-
-    ### Docker
-    ```bash
-    docker run --rm -v $(pwd):/repo ghcr.io/SCHW-AI/aicommit
-    ```
-
-    **Full Documentation**: https://github.com/SCHW-AI/aicommit
-
-# Announce releases
-announce:
-  discord:
-    enabled: true
-    message_template: |
-      **AICommit {{ .Tag }} is out!** 🚀
-      
-      Check it out: {{ .ReleaseURL }}
-    
-  twitter:
-    enabled: true
-    message_template: |
-      AICommit {{ .Tag }} is out! 🚀
-      
-      AI-powered Git commit messages
-      
-      {{ .ReleaseURL }}
-      
-      #golang #git #ai #productivity
-
-  slack:
-    enabled: false
-    message_template: |
-      AICommit {{ .Tag }} is out! Check it out: {{ .ReleaseURL }}
-
-# Signing
-signs:
-  - cmd: cosign
-    certificate: "${artifact}.pem"
-    args:
-      - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
-      - "${artifact}"
-      - "--yes"
-    artifacts: checksum
-    output: true

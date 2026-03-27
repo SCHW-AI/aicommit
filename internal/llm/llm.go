@@ -3,6 +3,8 @@ package llm
 import (
 	"fmt"
 	"strings"
+
+	"github.com/SCHW-AI/aicommit/internal/provider"
 )
 
 // CommitMessage represents a structured commit message
@@ -24,25 +26,27 @@ type Client interface {
 	GenerateCommitMessage(diff string) (*CommitMessage, error)
 }
 
-// NewClient creates a new LLM client based on the model name
-func NewClient(model, apiKey string) (Client, error) {
+// NewClient creates a new LLM client for the selected provider and model.
+func NewClient(providerValue provider.Provider, model, apiKey string) (Client, error) {
 	if apiKey == "" {
-		return nil, fmt.Errorf("API key not found for model %s", model)
+		return nil, fmt.Errorf("API key is required for provider %q", providerValue)
+	}
+	if model == "" {
+		model = provider.DefaultModel(providerValue)
+	}
+	if err := provider.ValidateModel(providerValue, model); err != nil {
+		return nil, err
 	}
 
-	modelLower := strings.ToLower(model)
-	
-	// Detect provider from model name
-	switch {
-	case strings.Contains(modelLower, "claude"):
+	switch providerValue {
+	case provider.Anthropic:
 		return NewAnthropicClient(apiKey, model)
-	case strings.Contains(modelLower, "gemini"):
+	case provider.Gemini:
 		return NewGeminiClient(apiKey, model)
-	case strings.Contains(modelLower, "gpt"):
+	case provider.OpenAI:
 		return NewOpenAIClient(apiKey, model)
 	default:
-		// Default to Gemini for backward compatibility
-		return NewGeminiClient(apiKey, model)
+		return nil, fmt.Errorf("unsupported provider %q", providerValue)
 	}
 }
 
@@ -77,28 +81,27 @@ Now analyze this diff:
 // ParseResponse parses the LLM response into a CommitMessage
 func ParseResponse(response string) (*CommitMessage, error) {
 	lines := strings.Split(response, "\n")
-	
+
 	var header, description string
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		if strings.HasPrefix(line, "HEADER:") {
 			header = strings.TrimSpace(strings.TrimPrefix(line, "HEADER:"))
 		} else if strings.HasPrefix(line, "DESCRIPTION:") {
 			description = strings.TrimSpace(strings.TrimPrefix(line, "DESCRIPTION:"))
 		}
 	}
-	
+
 	if header == "" {
 		return nil, fmt.Errorf("no header found in response")
 	}
-	
-	// Ensure header is not too long
-	if len(header) > 72 {
-		header = header[:72]
+
+	if len(header) > 50 {
+		return nil, fmt.Errorf("header exceeds 50 characters")
 	}
-	
+
 	return &CommitMessage{
 		Header:      header,
 		Description: description,

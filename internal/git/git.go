@@ -28,16 +28,40 @@ func IsWranglerProject() bool {
 	return err == nil
 }
 
+// lockFiles lists filenames whose contents add noise to AI-generated diffs.
+// These files are still committed normally — they are only excluded from the
+// diff sent to the AI and the --export output.
+var lockFiles = []string{
+	"package-lock.json",
+	"yarn.lock",
+	"pnpm-lock.yaml",
+	"go.sum",
+	"Gemfile.lock",
+	"poetry.lock",
+	"Cargo.lock",
+	"composer.lock",
+}
+
 // GetFullDiff gets the complete diff including tracked and untracked files
 func GetFullDiff() (string, error) {
 	var fullDiff strings.Builder
 
 	// Get tracked file changes
-	trackedCmd := exec.Command("git", "diff", "HEAD")
+	excludeArgs := make([]string, 0, len(lockFiles)+3)
+	excludeArgs = append(excludeArgs, "diff", "HEAD", "--")
+	for _, lf := range lockFiles {
+		excludeArgs = append(excludeArgs, ":!"+lf)
+	}
+	trackedCmd := exec.Command("git", excludeArgs...)
 	trackedOutput, err := trackedCmd.Output()
 	if err != nil {
 		// If there's no HEAD (initial commit), use diff --cached
-		trackedCmd = exec.Command("git", "diff", "--cached")
+		excludeArgs = make([]string, 0, len(lockFiles)+3)
+		excludeArgs = append(excludeArgs, "diff", "--cached", "--")
+		for _, lf := range lockFiles {
+			excludeArgs = append(excludeArgs, ":!"+lf)
+		}
+		trackedCmd = exec.Command("git", excludeArgs...)
 		trackedOutput, _ = trackedCmd.Output()
 	}
 
@@ -63,6 +87,11 @@ func GetFullDiff() (string, error) {
 				continue
 			}
 
+			// Skip lock files from AI/export diff
+			if isLockFile(file) {
+				continue
+			}
+
 			fullDiff.WriteString(fmt.Sprintf("\n--- New file: %s ---\n", file))
 
 			// Try to read the file content
@@ -82,6 +111,16 @@ func GetFullDiff() (string, error) {
 	}
 
 	return fullDiff.String(), nil
+}
+
+func isLockFile(path string) bool {
+	base := filepath.Base(path)
+	for _, lf := range lockFiles {
+		if base == lf {
+			return true
+		}
+	}
+	return false
 }
 
 // StageAll stages all changes

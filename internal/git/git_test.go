@@ -72,6 +72,48 @@ func TestGetFullDiffIncludesTrackedAndUntracked(t *testing.T) {
 	}
 }
 
+func TestGetFullDiffSkipsLockFiles(t *testing.T) {
+	dir := createRepo(t)
+	withRepoCWD(t, dir)
+
+	if err := os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("hello\nworld\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), []byte("module checksum\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("fresh\nfile\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "package-lock.json"), []byte("{\"lock\":true}\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	diff, err := git.GetFullDiff()
+	if err != nil {
+		t.Fatalf("GetFullDiff failed: %v", err)
+	}
+
+	if !strings.Contains(diff, "tracked.txt") {
+		t.Fatal("expected tracked non-lock file diff to be included")
+	}
+	if !strings.Contains(diff, "--- New file: new.txt ---") {
+		t.Fatal("expected untracked non-lock file to be included")
+	}
+	if strings.Contains(diff, "go.sum") {
+		t.Fatal("expected tracked lock file diff to be excluded")
+	}
+	if strings.Contains(diff, "package-lock.json") {
+		t.Fatal("expected untracked lock file content to be excluded")
+	}
+	if strings.Contains(diff, "module checksum") {
+		t.Fatal("expected tracked lock file content to be excluded")
+	}
+	if strings.Contains(diff, "{\"lock\":true}") {
+		t.Fatal("expected untracked lock file content to be excluded")
+	}
+}
+
 func TestCommitUsesMultilineTempFile(t *testing.T) {
 	dir := createRepo(t)
 	withRepoCWD(t, dir)

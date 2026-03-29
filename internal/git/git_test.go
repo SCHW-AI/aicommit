@@ -64,11 +64,61 @@ func TestGetFullDiffIncludesTrackedAndUntracked(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetFullDiff failed: %v", err)
 	}
-	if !strings.Contains(diff, "=== MODIFIED FILES ===") {
-		t.Fatal("expected modified files section")
+	if !strings.Contains(diff, "diff --git a/tracked.txt b/tracked.txt") {
+		t.Fatal("expected tracked file diff to be included")
 	}
 	if !strings.Contains(diff, "--- New file: new.txt ---") {
 		t.Fatal("expected new file section")
+	}
+}
+
+func TestGetFullDiffShowsDeletedFilesByNameAndSortsSmallestFirst(t *testing.T) {
+	dir := createRepo(t)
+	withRepoCWD(t, dir)
+
+	if err := os.WriteFile(filepath.Join(dir, "delete-me.txt"), []byte("to be deleted\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	runGit(t, dir, "add", "delete-me.txt")
+	runGit(t, dir, "commit", "-m", "add delete target")
+
+	if err := os.Remove(filepath.Join(dir, "delete-me.txt")); err != nil {
+		t.Fatalf("Remove failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "tracked.txt"), []byte("hello\nworld\nwith more lines\nfor a larger diff\nand even more context\nplus another line\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "new.txt"), []byte("fresh\nfile\nwith\nsome\ncontent\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	diff, err := git.GetFullDiff()
+	if err != nil {
+		t.Fatalf("GetFullDiff failed: %v", err)
+	}
+
+	deletedEntry := "--- Deleted file: delete-me.txt ---"
+	newEntry := "--- New file: new.txt ---"
+	modifiedEntry := "diff --git a/tracked.txt b/tracked.txt"
+
+	if !strings.Contains(diff, deletedEntry) {
+		t.Fatal("expected deleted file entry to be included")
+	}
+	if strings.Contains(diff, "deleted file mode") {
+		t.Fatal("expected deleted files to be represented without full diff content")
+	}
+	if strings.Contains(diff, "-to be deleted") {
+		t.Fatal("expected deleted file contents to be excluded")
+	}
+
+	deletedIndex := strings.Index(diff, deletedEntry)
+	newIndex := strings.Index(diff, newEntry)
+	modifiedIndex := strings.Index(diff, modifiedEntry)
+	if deletedIndex == -1 || newIndex == -1 || modifiedIndex == -1 {
+		t.Fatal("expected deleted, new, and modified sections to all be present")
+	}
+	if !(deletedIndex < newIndex && newIndex < modifiedIndex) {
+		t.Fatal("expected sections to be ordered from smallest to largest")
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -42,36 +43,61 @@ var lockFiles = []string{
 	"composer.lock",
 }
 
+type diffSection struct {
+	label   string
+	content string
+}
+
 // GetFullDiff gets the complete diff including tracked and untracked files
 func GetFullDiff() (string, error) {
-	var fullDiff strings.Builder
+	var sections []diffSection
 
-	// Get tracked file changes
-	excludeArgs := make([]string, 0, len(lockFiles)+3)
-	excludeArgs = append(excludeArgs, "diff", "HEAD", "--")
+	// Tracked modifications (exclude deletions)
+	excludeArgs := []string{"diff", "HEAD", "--diff-filter=d", "--"}
 	for _, lf := range lockFiles {
 		excludeArgs = append(excludeArgs, ":!"+lf)
 	}
 	trackedCmd := exec.Command("git", excludeArgs...)
 	trackedOutput, err := trackedCmd.Output()
 	if err != nil {
-		// If there's no HEAD (initial commit), use diff --cached
-		excludeArgs = make([]string, 0, len(lockFiles)+3)
-		excludeArgs = append(excludeArgs, "diff", "--cached", "--")
+		// No HEAD yet - try --cached
+		cachedArgs := []string{"diff", "--cached", "--diff-filter=d", "--"}
 		for _, lf := range lockFiles {
-			excludeArgs = append(excludeArgs, ":!"+lf)
+			cachedArgs = append(cachedArgs, ":!"+lf)
 		}
-		trackedCmd = exec.Command("git", excludeArgs...)
+		trackedCmd = exec.Command("git", cachedArgs...)
 		trackedOutput, _ = trackedCmd.Output()
 	}
 
+	// Split tracked output into per-file sections
 	if len(trackedOutput) > 0 {
-		fullDiff.WriteString("=== MODIFIED FILES ===\n")
-		fullDiff.Write(trackedOutput)
-		fullDiff.WriteString("\n\n")
+		for _, chunk := range splitDiffByFile(string(trackedOutput)) {
+			sections = append(sections, diffSection{
+				label:   "MODIFIED",
+				content: chunk,
+			})
+		}
 	}
 
-	// Get untracked files
+	// Deleted files - names only, no content
+	deletedCmd := exec.Command("git", "diff", "HEAD", "--diff-filter=D", "--name-only")
+	deletedOutput, err := deletedCmd.Output()
+	if err != nil {
+		deletedCmd = exec.Command("git", "diff", "--cached", "--diff-filter=D", "--name-only")
+		deletedOutput, _ = deletedCmd.Output()
+	}
+	if len(deletedOutput) > 0 {
+		for _, name := range strings.Split(strings.TrimSpace(string(deletedOutput)), "\n") {
+			if name != "" {
+				sections = append(sections, diffSection{
+					label:   "DELETED",
+					content: fmt.Sprintf("--- Deleted file: %s ---\n", name),
+				})
+			}
+		}
+	}
+
+	// Untracked (new) files
 	untrackedCmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
 	untrackedOutput, err := untrackedCmd.Output()
 	if err != nil {
@@ -79,38 +105,57 @@ func GetFullDiff() (string, error) {
 	}
 
 	if len(untrackedOutput) > 0 {
-		fullDiff.WriteString("=== NEW FILES ===\n")
 		untrackedFiles := strings.Split(strings.TrimSpace(string(untrackedOutput)), "\n")
 
 		for _, file := range untrackedFiles {
-			if file == "" {
+			if file == "" || isLockFile(file) {
 				continue
 			}
 
-			// Skip lock files from AI/export diff
-			if isLockFile(file) {
-				continue
-			}
-
-			fullDiff.WriteString(fmt.Sprintf("\n--- New file: %s ---\n", file))
-
-			// Try to read the file content
+			var buf strings.Builder
+			buf.WriteString(fmt.Sprintf("--- New file: %s ---\n", file))
 			content, err := os.ReadFile(file)
 			if err != nil {
-				fullDiff.WriteString(fmt.Sprintf("[Could not read file: %v]\n", err))
-				continue
+				buf.WriteString(fmt.Sprintf("[Could not read file: %v]\n", err))
+			} else {
+				for _, line := range strings.Split(string(content), "\n") {
+					buf.WriteString("+" + line + "\n")
+				}
 			}
-
-			// Add content with + prefix (like git diff)
-			lines := strings.Split(string(content), "\n")
-			for _, line := range lines {
-				fullDiff.WriteString("+" + line + "\n")
-			}
-			fullDiff.WriteString("\n")
+			sections = append(sections, diffSection{
+				label:   "NEW",
+				content: buf.String(),
+			})
 		}
 	}
 
+	// Sort smallest first so truncation preserves the broadest picture
+	sort.Slice(sections, func(i, j int) bool {
+		return len(sections[i].content) < len(sections[j].content)
+	})
+
+	var fullDiff strings.Builder
+	for _, s := range sections {
+		fullDiff.WriteString(s.content)
+		fullDiff.WriteString("\n")
+	}
+
 	return fullDiff.String(), nil
+}
+
+// splitDiffByFile splits a unified diff into per-file chunks on "diff --git" boundaries.
+func splitDiffByFile(raw string) []string {
+	const marker = "diff --git "
+	var chunks []string
+	parts := strings.Split(raw, marker)
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		chunks = append(chunks, marker+p+"\n")
+	}
+	return chunks
 }
 
 func isLockFile(path string) bool {

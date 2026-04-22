@@ -67,10 +67,10 @@ func NewRootCmd(deps Dependencies) *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().StringVar(&options.ConfigPath, "config", "", "Path to the AICommit config file")
-	rootCmd.Flags().BoolVar(&options.Push, "push", false, "Push to git remote after committing")
-	rootCmd.Flags().BoolVar(&options.Clasp, "clasp", false, "Push to clasp after committing")
-	rootCmd.Flags().BoolVar(&options.Wrangler, "wrangler", false, "Deploy to Cloudflare Workers after committing")
-	rootCmd.Flags().BoolVar(&options.Export, "export", false, "Export diff to a file without committing")
+	rootCmd.Flags().BoolVarP(&options.Push, "push", "p", false, "Push to git remote after committing")
+	rootCmd.Flags().BoolVarP(&options.Clasp, "clasp", "c", false, "Push to clasp after committing")
+	rootCmd.Flags().BoolVarP(&options.Wrangler, "wrangler", "w", false, "Deploy to Cloudflare Workers after committing")
+	rootCmd.Flags().BoolVarP(&options.Export, "export", "e", false, "Export diff to a file without committing")
 	rootCmd.AddCommand(newConfigCmd(deps, options))
 
 	return rootCmd

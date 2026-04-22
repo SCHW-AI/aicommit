@@ -86,6 +86,40 @@ func TestLegacyPowerShellFlagRejected(t *testing.T) {
 	}
 }
 
+func TestRootFlagsSupportShortAndLongForms(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		flagName string
+	}{
+		{name: "push short", args: []string{"-p"}, flagName: "push"},
+		{name: "push long", args: []string{"--push"}, flagName: "push"},
+		{name: "clasp short", args: []string{"-c"}, flagName: "clasp"},
+		{name: "clasp long", args: []string{"--clasp"}, flagName: "clasp"},
+		{name: "wrangler short", args: []string{"-w"}, flagName: "wrangler"},
+		{name: "wrangler long", args: []string{"--wrangler"}, flagName: "wrangler"},
+		{name: "export short", args: []string{"-e"}, flagName: "export"},
+		{name: "export long", args: []string{"--export"}, flagName: "export"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := cmd.NewRootCmd(cmd.Dependencies{})
+			if err := root.ParseFlags(tt.args); err != nil {
+				t.Fatalf("ParseFlags failed: %v", err)
+			}
+
+			value, err := root.Flags().GetBool(tt.flagName)
+			if err != nil {
+				t.Fatalf("GetBool(%q) failed: %v", tt.flagName, err)
+			}
+			if !value {
+				t.Fatalf("expected %s to be true after parsing %v", tt.flagName, tt.args)
+			}
+		})
+	}
+}
+
 func TestMissingConfigFailsLoudly(t *testing.T) {
 	repo := createRepo(t)
 	cwd, err := os.Getwd()

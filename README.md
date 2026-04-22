@@ -66,9 +66,13 @@ aicommit config delete-key anthropic
 
 ```bash
 aicommit
+aicommit -p
 aicommit --push
+aicommit -c
 aicommit --clasp
+aicommit -w
 aicommit --wrangler
+aicommit -e
 aicommit --export
 ```
 

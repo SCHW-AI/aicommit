@@ -20,7 +20,7 @@ go install github.com/SCHW-AI/aicommit@latest
 
 Alternatively, download a release binary from [GitHub Releases](https://github.com/SCHW-AI/aicommit/releases) or build from source.
 
-> **Windows note:** Release binaries are unsigned. Windows Smart App Control or SmartScreen may block them. `go install` builds locally and avoids this entirely.
+> **Windows note:** Release binaries are unsigned. Windows Smart App Control or SmartScreen may block them. `go install .` builds locally and avoids this entirely.
 
 ```bash
 git clone https://github.com/SCHW-AI/aicommit.git
@@ -121,6 +121,7 @@ Default:
 ```bash
 go test ./...
 go build ./...
+go install .
 ```
 
 The repository ships a minimal CI flow and a tagged release flow for GitHub Releases. Package-manager automation is intentionally out of scope until it is fully maintained and tested.
